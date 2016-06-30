@@ -1,25 +1,134 @@
 ﻿declare var ymaps: any;
 namespace App {
     'use strict';
+    var marksJSON;
 
     export class NEstimateController {
 
-        /*static $inject = ['$http'];*/
+        static $inject = ['$http'];
 
-        constructor() {
-            this.request();
+        constructor(private $http: any) {
+
+
+
+            $http.get('mark2.json').success(function (data) {
+                console.log(data + '3');
+                marksJSON = data;
+                console.log(data+'3');
+                console.log(marksJSON);
+            });
+
             ymaps.ready(init);
             var myMap;
             function init() {
-                myMap = new ymaps.Map("map_container", {
-                    center: [55.73, 37.58],
-                    zoom: 10
-                })
+
+                var map: any = new ymaps.Map("map_container", {
+                        center: [55.73, 37.58],
+                        zoom: 10
+                    }),
+                    CustomControlClass: any = function (options): void {
+                        CustomControlClass.superclass.constructor.call(this, options);
+                        this._$content = null;
+                        this._geocoderDeferred = null;
+                    };
+
+                ymaps.util.augment(CustomControlClass, ymaps.collection.Item, {
+                    onAddToMap: function (map) {
+                        CustomControlClass.superclass.onAddToMap.call(this, map);
+                        this._lastCenter = null;
+                        this.getParent().getChildElement(this).then(this._onGetChildElement, this);
+                    },
+
+                    onRemoveFromMap: function (oldMap) {
+                        this._lastCenter = null;
+                        if (this._$content) {
+                            this._$content.remove();
+                            this._mapEventGroup.removeAll();
+                        }
+                        CustomControlClass.superclass.onRemoveFromMap.call(this, oldMap);
+                    },
+
+                    _onGetChildElement: function (parentDomContainer) {
+                        var templateWindowFeatures: any;
+                        this._$content = templateWindowFeatures.appendTo(parentDomContainer);
+                        this._mapEventGroup = this.getMap().events.group();
+
+                        var myWindow = $("#window"),
+                            features = $("#features"),
+                            mapContainer = $("#map_container");
+
+                        var cache = myWindow.html();
+
+                        features.click(function () {
+                            myWindow.data("kendoWindow").open();
+                            features.fadeOut();
+                        });
+
+                        myWindow.on('click', '#refreshFeatures', function () {
+                            myWindow.html(cache);
+                        });
+
+                        mapContainer.click(function () {
+                            if (features.css('display') == "none") {
+                                myWindow.data("kendoWindow").close();
+                            }
+                        });
+
+                        function defaultFeatures() {
+                            var vals = $('.k-radio').map(function (i, el) {
+
+                                if ($(el).prop('checked')) {
+                                    return $(el).val();
+                                }
+
+                            }).get();
+
+                            this.featuresList = vals;
+                        }
+
+                        myWindow.on('click', '#sendFeatures', function () {
+                            defaultFeatures();
+                            map.geoObjects.removeAll();
+                            this.markNum = 0;
+                            this.putMarks(map);
+                        });
+
+                        function onClose() {
+                            features.fadeIn();
+                        }
+
+                        myWindow.kendoWindow({
+                            visible: false,
+                            title: "Задать характеристики для отображения меток",
+                            actions: [
+                                "Close"
+                            ],
+                            close: onClose
+                        }).data("kendoWindow");
+
+                        defaultFeatures();
+                        this.putMarks(map);
+                    }
+
+                });
+
+                var buttonControl = new CustomControlClass();
+                map.controls.add(buttonControl, {
+                    float: 'right',
+                    position: {
+                        top: 50,
+                        right: 10
+                    }
+                });
+                myMap = map;
             }
+
+
+            this.putMarks(myMap);
 
         }
 
-        private marksJSON: any;
+        /* private marksJSON: any = {};*/
         private idList: string[] = [];
         private counterList: string[] = [];
         private chosenFeatures: string[] = [];
@@ -31,28 +140,29 @@ namespace App {
         private CHART = 3;
         private SPEC_EVENT = 4;
 
-        private request(): void {
-            let req = new XMLHttpRequest();
-            req.open("GET", "mark2.json", true);
-            req.addEventListener("load", function () {
-                this.marksJSON = req;
-            });
-            req.send(null);
-            console.log("htyut");
-        }
+        /*private request(): void {
+         let req = new XMLHttpRequest();
+         req.open("GET", "mark2.json", true);
+         req.addEventListener("load", function () {
+         this.marksJSON = req;
+         });
+         req.send(null);
+         console.log("htyut");
+         }*/
 
-        private putMarks(map): void {
-            let marksCount: any = this.marksJSON.houses;
+        private putMarks(map) {
+            console.log(marksJSON);
+            let marksCount: any = marksJSON.houses;
             let markNum: number = 0;
             let specEvents: Object = {};
             let greyBorders: Object = {};
-
+            console.log(marksCount);
             for (let i = 0; i < marksCount.length; i++) {
 
                 this.bindFeatures(marksCount[i]);
 
                 let id: string = marksCount[i].mark_id;
-                let coords: Object = marksCount[i].mark_coords;
+                let coords: any = marksCount[i].mark_coords;
                 let counter: string = this.chosenFeatures[this.NUMBER_VALUE];
                 let colour = this.chosenFeatures[this.COLOUR_MARK];
 
@@ -103,9 +213,9 @@ namespace App {
                         }
                     }
 
-                    (markNum < this.marksJSON.houses.length + 1) ? markNum++ : markNum = 0;
+                    (markNum < marksJSON.houses.length + 1) ? markNum++ : markNum = 0;
                 };
-
+                var getMarkTemplate: any;
                 var markLayout = ymaps.templateLayoutFactory.createClass(getMarkTemplate(marksCount[i].type, id), {
                     build: chartBuild
                 });
@@ -159,110 +269,10 @@ namespace App {
             }
         }
 
-       /* private init(): void {
 
-            var map: any = new ymaps.Map("map_container", {
-                center: [55.73, 37.58],
-                zoom: 10
-            })
-            CustomControlClass = function (options) {
-                CustomControlClass.superclass.constructor.call(this, options);
-                this._$content = null;
-                this._geocoderDeferred = null;
-            };
 
-            ymaps.util.augment(CustomControlClass, ymaps.collection.Item, {
-                onAddToMap: function (map) {
-                    CustomControlClass.superclass.onAddToMap.call(this, map);
-                    this._lastCenter = null;
-                    this.getParent().getChildElement(this).then(this._onGetChildElement, this);
-                },
+    }
 
-                onRemoveFromMap: function (oldMap) {
-                    this._lastCenter = null;
-                    if (this._$content) {
-                        this._$content.remove();
-                        this._mapEventGroup.removeAll();
-                    }
-                    CustomControlClass.superclass.onRemoveFromMap.call(this, oldMap);
-                },
-
-                _onGetChildElement: function (parentDomContainer) {
-                    this._$content = templateWindowFeatures.appendTo(parentDomContainer);
-                    this._mapEventGroup = this.getMap().events.group();
-
-                    var myWindow = $("#window"),
-                        features = $("#features"),
-                        mapContainer = $("#map_container");
-
-                    var cache = myWindow.html();
-
-                    features.click(function () {
-                        myWindow.data("kendoWindow").open();
-                        features.fadeOut();
-                    });
-
-                    myWindow.on('click', '#refreshFeatures', function () {
-                        myWindow.html(cache);
-                    });
-
-                    mapContainer.click(function () {
-                        if (features.css('display') == "none") {
-                            myWindow.data("kendoWindow").close();
-                        }
-                    });
-
-                    function defaultFeatures() {
-                        var vals = $('.k-radio').map(function (i, el) {
-
-                            if ($(el).prop('checked')) {
-                                return $(el).val();
-                            }
-
-                        }).get();
-
-                        this.featuresList = vals;
-                    }
-
-                    myWindow.on('click', '#sendFeatures', function () {
-                        defaultFeatures();
-                        map.geoObjects.removeAll();
-                        this.markNum = 0;
-                        this.putMarks(map);
-                    });
-
-                    function onClose() {
-                        features.fadeIn();
-                    }
-
-                    myWindow.kendoWindow({
-                        visible: false,
-                        title: "Задать характеристики для отображения меток",
-                        actions: [
-                            "Close"
-                        ],
-                        close: onClose
-                    }).data("kendoWindow");
-
-                    defaultFeatures();
-                    this.putMarks(map);
-                }
-
-            });
-
-            var buttonControl = new CustomControlClass();
-            map.controls.add(buttonControl, {
-                float: 'right',
-                position: {
-                    top: 50,
-                    right: 10
-                }
-            });
-        }
-
-        ymaps.ready(this.init);*/
-}
-   
 }
 
 angular
